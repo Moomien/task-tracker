@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"strconv"
 	"time"
 )
@@ -47,6 +50,28 @@ func NewTracker(storage Storage) *Tracker {
 
 func NewJSONStorage(filename string) *JSONStorage {
 	return &JSONStorage{filename: filename}
+}
+
+func (js *JSONStorage) SaveTasks(tasks []Task) error {
+	data, err := json.MarshalIndent(tasks, "", "  ")
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(js.filename, data, 0644)
+}
+
+func (js *JSONStorage) LoadTasks() ([]Task, error) {
+	data, err := ioutil.ReadFile(js.filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []Task{}, nil
+		}
+		return nil, err
+	}
+
+	var tasks []Task
+	err = json.Unmarshal(data, &tasks)
+	return tasks, err
 }
 
 var id int = 0
