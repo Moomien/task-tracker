@@ -24,7 +24,29 @@ type Task struct {
 }
 
 type Tracker struct {
-	tasks []Task
+	tasks   []Task
+	storage Storage
+}
+
+type Storage interface {
+	SaveTasks(tasks []Task) error
+	LoadTasks() ([]Task, error)
+}
+
+type JSONStorage struct {
+	filename string
+}
+
+func NewTracker(storage Storage) *Tracker {
+	tasks, _ := storage.LoadTasks()
+	return &Tracker{
+		tasks:   tasks,
+		storage: storage,
+	}
+}
+
+func NewJSONStorage(filename string) *JSONStorage {
+	return &JSONStorage{filename: filename}
 }
 
 var id int = 0
