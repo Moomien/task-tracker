@@ -1,5 +1,11 @@
 package main
 
+import (
+	"fmt"
+	"strconv"
+	"time"
+)
+
 type taskTracker interface {
 	Add(note string)
 	Update(id string, note string)
@@ -25,7 +31,15 @@ var id int = 0
 
 // add task
 func (t *Tracker) Add(note string) {
-
+	id++
+	time := time.Now()
+	t.tasks = append(t.tasks, Task{
+		ID:          strconv.Itoa(id),
+		Description: note,
+		Status:      "todo",
+		CreatedAt:   time.Format("2006-01-02 15:04:05"),
+		UpdatedAt:   time.Format("2006-01-02 15:04:05"),
+	})
 }
 
 // update task
@@ -50,7 +64,52 @@ func (t *Tracker) MarkDone(id string) {
 
 // listing tasks by status
 func (t *Tracker) List(status string) {
-
+	switch status {
+	case "":
+		for _, v := range t.tasks {
+			fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s",
+				v.ID,
+				v.Description,
+				v.Status,
+				v.CreatedAt,
+				v.UpdatedAt)
+		}
+	case "todo":
+		for _, v := range t.tasks {
+			if v.Status == "todo" {
+				fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s",
+					v.ID,
+					v.Description,
+					v.Status,
+					v.CreatedAt,
+					v.UpdatedAt)
+			}
+		}
+	case "in-progress":
+		for _, v := range t.tasks {
+			if v.Status == "in-progress" {
+				fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s",
+					v.ID,
+					v.Description,
+					v.Status,
+					v.CreatedAt,
+					v.UpdatedAt)
+			}
+		}
+	case "done":
+		for _, v := range t.tasks {
+			if v.Status == "done" {
+				fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s",
+					v.ID,
+					v.Description,
+					v.Status,
+					v.CreatedAt,
+					v.UpdatedAt)
+			}
+		}
+	default:
+		fmt.Println("Wrong argument")
+	}
 }
 
 func main() {
