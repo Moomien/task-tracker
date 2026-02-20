@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"time"
@@ -13,8 +12,7 @@ type taskTracker interface {
 	Add(note string)
 	Update(id string, note string)
 	Delete(id string)
-	MarkInProgress(id string)
-	MarkDone(id string)
+	Mark(id string, status string)
 	List(status string)
 }
 
@@ -40,6 +38,7 @@ type JSONStorage struct {
 	filename string
 }
 
+// new tracker instance
 func NewTracker(storage Storage) *Tracker {
 	tasks, _ := storage.LoadTasks()
 	return &Tracker{
@@ -48,20 +47,23 @@ func NewTracker(storage Storage) *Tracker {
 	}
 }
 
+// new json storage instance
 func NewJSONStorage(filename string) *JSONStorage {
-	return &JSONStorage{filename: filename}
+	return &JSONStorage{filename: filename + ".json"}
 }
 
+// save tasks to json storage
 func (js *JSONStorage) SaveTasks(tasks []Task) error {
 	data, err := json.MarshalIndent(tasks, "", "  ")
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(js.filename, data, 0644)
+	return os.WriteFile(js.filename, data, 0644)
 }
 
+// load tasks from json storage
 func (js *JSONStorage) LoadTasks() ([]Task, error) {
-	data, err := ioutil.ReadFile(js.filename)
+	data, err := os.ReadFile(js.filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []Task{}, nil
@@ -74,39 +76,122 @@ func (js *JSONStorage) LoadTasks() ([]Task, error) {
 	return tasks, err
 }
 
-var id int = 0
-
 // add task
 func (t *Tracker) Add(note string) {
-	id++
-	time := time.Now()
-	t.tasks = append(t.tasks, Task{
-		ID:          strconv.Itoa(id),
+	tasks, err := t.storage.LoadTasks()
+	if err != nil {
+		fmt.Println("Error loading tasks: ", err)
+		return
+	}
+	//generate new id based on max existing
+	maxID := 0
+	for _, task := range tasks {
+		if id, err := strconv.Atoi(task.ID); err == nil && id > maxID {
+			maxID = id
+		}
+	}
+
+	newTask := Task{
+		ID:          strconv.Itoa(maxID + 1),
 		Description: note,
 		Status:      "todo",
-		CreatedAt:   time.Format("2006-01-02 15:04:05"),
-		UpdatedAt:   time.Format("2006-01-02 15:04:05"),
-	})
+		CreatedAt:   time.Now().Format("2006-01-02 15:04:05"),
+		UpdatedAt:   time.Now().Format("2006-01-02 15:04:05"),
+	}
+	//save tasks to storage
+	tasks = append(tasks, newTask)
+	if err := t.storage.SaveTasks(tasks); err != nil {
+		fmt.Println("error while saving tasks to storage: ", err)
+		return
+	}
 }
 
 // update task
 func (t *Tracker) Update(id string, note string) {
-
+	tasks, err := t.storage.LoadTasks()
+	if err != nil {
+		fmt.Println("Error loading tasks: ", err)
+		return
+	}
+	for i, v := range tasks {
+		if v.ID == id {
+			tasks[i] = Task{
+				ID:          id,
+				Description: note,
+				Status:      "todo",
+				CreatedAt:   v.CreatedAt,
+				UpdatedAt:   time.Now().Format("2006-01-02 15:04:05"),
+			}
+			if err := t.storage.SaveTasks(tasks); err != nil {
+				fmt.Println("error while saving tasks to storage: ", err)
+				return
+			}
+			fmt.Printf("Task %s updated!\n", id)
+			break
+		}
+	}
 }
 
 // delete task
 func (t *Tracker) Delete(id string) {
+	tasks, err := t.storage.LoadTasks()
+	if err != nil {
+		fmt.Println("Error loading tasks: ", err)
+		return
+	}
 
+	for i, v := range tasks {
+		if v.ID == id {
+			tasks = append(tasks[:i], tasks[i+1:]...)
+			if err := t.storage.SaveTasks(tasks); err != nil {
+				fmt.Println("error while saving tasks to storage: ", err)
+				return
+			}
+			fmt.Printf("Task %s deleted\n", id)
+			break
+		}
+	}
 }
 
-// mark progress "in-progress"
-func (t *Tracker) MarkInProgress(id string) {
+// marg progress ("done", "in-progress")
+func (t *Tracker) Mark(id string, status string) {
+	tasks, err := t.storage.LoadTasks()
+	if err != nil {
+		fmt.Println("Error loading tasks: ", err)
+		return
+	}
 
-}
-
-// mark progress "done"
-func (t *Tracker) MarkDone(id string) {
-
+	for i, v := range tasks {
+		if v.ID == id {
+			switch status {
+			case "done", "DONE", "Done", "DoNe":
+				tasks[i] = Task{
+					ID:          id,
+					Description: v.Description,
+					Status:      "Done",
+					CreatedAt:   v.CreatedAt,
+					UpdatedAt:   time.Now().Format("2006-01-02 15:04:05"),
+				}
+			case "in-progress", "progress", "in progress":
+				tasks[i] = Task{
+					ID:          id,
+					Description: v.Description,
+					Status:      "In-Progress",
+					CreatedAt:   v.CreatedAt,
+					UpdatedAt:   time.Now().Format("2006-01-02 15:04:05"),
+				}
+			default:
+				fmt.Println("Wrong argument!")
+				return
+			}
+			if err := t.storage.SaveTasks(tasks); err != nil {
+				fmt.Println("error while saving tasks to storage: ", err)
+				return
+			}
+			fmt.Printf("Task %s updated!\n", id)
+			break
+		}
+	}
 }
 
 // listing tasks by status
@@ -114,7 +199,7 @@ func (t *Tracker) List(status string) {
 	switch status {
 	case "":
 		for _, v := range t.tasks {
-			fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s",
+			fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s\n",
 				v.ID,
 				v.Description,
 				v.Status,
@@ -124,7 +209,7 @@ func (t *Tracker) List(status string) {
 	case "todo":
 		for _, v := range t.tasks {
 			if v.Status == "todo" {
-				fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s",
+				fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s\n",
 					v.ID,
 					v.Description,
 					v.Status,
@@ -135,7 +220,7 @@ func (t *Tracker) List(status string) {
 	case "in-progress":
 		for _, v := range t.tasks {
 			if v.Status == "in-progress" {
-				fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s",
+				fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s\n",
 					v.ID,
 					v.Description,
 					v.Status,
@@ -146,7 +231,7 @@ func (t *Tracker) List(status string) {
 	case "done":
 		for _, v := range t.tasks {
 			if v.Status == "done" {
-				fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s",
+				fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s\n",
 					v.ID,
 					v.Description,
 					v.Status,
@@ -155,12 +240,15 @@ func (t *Tracker) List(status string) {
 			}
 		}
 	default:
-		fmt.Println("Wrong argument")
+		fmt.Println("Wrong argument\n")
 	}
 }
 
 func main() {
-	t := Tracker{}
-	t.Add("купить молоко")
-	t.List("")
+	storage := NewJSONStorage("jsonStorage")
+	tracker := NewTracker(storage)
+	tracker.Add("купить молока")
+	tracker.Add("Пара по хуйне")
+	tracker.Update("1", "Moloko")
+	tracker.List("")
 }
