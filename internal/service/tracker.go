@@ -1,10 +1,11 @@
-package main
+package service
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
+	"strings"
+	"task-tracker/internal/models"
+	"task-tracker/internal/storage"
 	"time"
 )
 
@@ -16,64 +17,18 @@ type taskTracker interface {
 	List(status string)
 }
 
-type Task struct {
-	ID          string `json:"id"`
-	Description string `json:"description"`
-	Status      string `json:"status"` //"todo" , "in-progress", "done"
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
-}
-
 type Tracker struct {
-	tasks   []Task
-	storage Storage
-}
-
-type Storage interface {
-	SaveTasks(tasks []Task) error
-	LoadTasks() ([]Task, error)
-}
-
-type JSONStorage struct {
-	filename string
+	tasks   []models.Task
+	storage storage.Storage
 }
 
 // new tracker instance
-func NewTracker(storage Storage) *Tracker {
+func NewTracker(storage storage.Storage) *Tracker {
 	tasks, _ := storage.LoadTasks()
 	return &Tracker{
 		tasks:   tasks,
 		storage: storage,
 	}
-}
-
-// new json storage instance
-func NewJSONStorage(filename string) *JSONStorage {
-	return &JSONStorage{filename: filename + ".json"}
-}
-
-// save tasks to json storage
-func (js *JSONStorage) SaveTasks(tasks []Task) error {
-	data, err := json.MarshalIndent(tasks, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(js.filename, data, 0644)
-}
-
-// load tasks from json storage
-func (js *JSONStorage) LoadTasks() ([]Task, error) {
-	data, err := os.ReadFile(js.filename)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []Task{}, nil
-		}
-		return nil, err
-	}
-
-	var tasks []Task
-	err = json.Unmarshal(data, &tasks)
-	return tasks, err
 }
 
 // add task
@@ -91,7 +46,7 @@ func (t *Tracker) Add(note string) {
 		}
 	}
 
-	newTask := Task{
+	newTask := models.Task{
 		ID:          strconv.Itoa(maxID + 1),
 		Description: note,
 		Status:      "todo",
@@ -115,7 +70,7 @@ func (t *Tracker) Update(id string, note string) {
 	}
 	for i, v := range tasks {
 		if v.ID == id {
-			tasks[i] = Task{
+			tasks[i] = models.Task{
 				ID:          id,
 				Description: note,
 				Status:      "todo",
@@ -163,17 +118,17 @@ func (t *Tracker) Mark(id string, status string) {
 
 	for i, v := range tasks {
 		if v.ID == id {
-			switch status {
-			case "done", "DONE", "Done", "DoNe":
-				tasks[i] = Task{
+			switch strings.ToLower(status) {
+			case "done":
+				tasks[i] = models.Task{
 					ID:          id,
 					Description: v.Description,
 					Status:      "Done",
 					CreatedAt:   v.CreatedAt,
 					UpdatedAt:   time.Now().Format("2006-01-02 15:04:05"),
 				}
-			case "in-progress", "progress", "in progress":
-				tasks[i] = Task{
+			case "in-progress":
+				tasks[i] = models.Task{
 					ID:          id,
 					Description: v.Description,
 					Status:      "In-Progress",
@@ -196,8 +151,8 @@ func (t *Tracker) Mark(id string, status string) {
 
 // listing tasks by status
 func (t *Tracker) List(status string) {
-	switch status {
-	case "":
+	switch strings.ToLower(status) {
+	case "all":
 		for _, v := range t.tasks {
 			fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s\n",
 				v.ID,
@@ -219,7 +174,7 @@ func (t *Tracker) List(status string) {
 		}
 	case "in-progress":
 		for _, v := range t.tasks {
-			if v.Status == "in-progress" {
+			if v.Status == "In-Progress" {
 				fmt.Printf("ID: %s, Description: %s, Status: %s, CreatedAt: %s, UpdatedAt: %s\n",
 					v.ID,
 					v.Description,
@@ -240,15 +195,6 @@ func (t *Tracker) List(status string) {
 			}
 		}
 	default:
-		fmt.Println("Wrong argument\n")
+		fmt.Println("Wrong argument")
 	}
-}
-
-func main() {
-	storage := NewJSONStorage("jsonStorage")
-	tracker := NewTracker(storage)
-	tracker.Add("купить молока")
-	tracker.Add("Пара по хуйне")
-	tracker.Update("1", "Moloko")
-	tracker.List("")
 }
